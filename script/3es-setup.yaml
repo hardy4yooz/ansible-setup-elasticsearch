@@ -1,0 +1,232 @@
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: Turn swap off
+      command: swapoff -a
+
+    - name: Backup Sources
+      shell:  cp /etc/apt/sources.list /etc/apt/sources.list.bak
+
+    - name: Copy Sources
+      copy: src=/etc/apt/sources.list dest=/etc/apt
+
+    - name: Run the equivalent of "apt-get update" as a separate step
+      apt:
+        update_cache: yes
+
+    - name: Install htop
+      apt:
+        name: htop
+        state: latest
+        install_recommends: no
+
+    - name: Add mappings to /etc/hosts
+      blockinfile:
+        backup: yes
+        path: /etc/hosts
+        block: |
+          {{ item.ip }} {{ item.name }}
+        marker: "# {mark} ANSIBLE MANAGED BLOCK {{ item.name }}"
+      loop:
+        - { name: es-master1, ip: 10.19.10.1 }
+        - { name: es-master2, ip: 10.19.10.2 }
+        - { name: es-master3, ip: 10.19.10.3 }
+        - { name: es-hot1, ip: 10.19.10.4 }
+        - { name: es-hot2, ip: 10.19.10.5 }
+        - { name: es-hot3, ip: 10.19.10.6 }
+        - { name: es-warm1, ip: 10.19.10.7 }
+        - { name: es-warm2, ip: 10.19.10.8 }
+        - { name: es-warm3, ip: 10.19.10.9 }
+        - { name: es-cold1, ip: 10.19.10.10 }
+        - { name: es-cold2, ip: 10.19.10.11 }
+        - { name: es-cold3, ip: 10.19.10.12 }
+
+    - name: Install JRE8
+      apt:
+        name: openjdk-8-jre
+        state: latest
+        install_recommends: no
+
+    - name: Set net.ipv4.tcp_keepalive_intvl
+      sysctl:
+        name: net.ipv4.tcp_keepalive_intvl
+        value: '30'
+        sysctl_file: /etc/sysctl.conf
+        reload: yes
+
+    - name: Set net.ipv4.tcp_keepalive_probes
+      sysctl:
+        name: net.ipv4.tcp_keepalive_probes
+        value: '3'
+        sysctl_file: /etc/sysctl.conf
+        reload: yes
+
+    - name: Set net.ipv4.tcp_keepalive_time
+      sysctl:
+        name: net.ipv4.tcp_keepalive_time
+        value: '900'
+        sysctl_file: /etc/sysctl.conf
+        reload: yes
+
+    - name: Set vm.max_map_count
+      sysctl:
+        name: vm.max_map_count
+        value: '262144'
+        sysctl_file: /etc/sysctl.conf
+        reload: yes
+
+    - name: Check elasticsearch installed
+      stat:
+        path: /etc/elasticsearch/elasticsearch.yml
+      register: es_installed
+
+    - name: Copy ElasticSearch Deb if not exists
+      copy: src=/root/elasticsearch-6.7.0.deb dest=/root
+      when: es_installed.stat.exists == False
+
+    - name: Install elasticsearch-6.7.0.deb
+      apt:
+        deb: /root/elasticsearch-6.7.0.deb
+      when: es_installed.stat.exists == True
+    - name: Set JVM -Xms
+      lineinfile:
+        dest: /etc/elasticsearch/jvm.options
+        regexp: '^-Xms'
+        line: "-Xms{{(ansible_memtotal_mb/1024/2)|round|int}}g"
+
+    - name: Set JVM -Xmx
+      lineinfile:
+        dest: /etc/elasticsearch/jvm.options
+        regexp: '^-Xmx'
+        line: "-Xmx{{(ansible_memtotal_mb/1024/2)|round|int}}g"
+
+    # 创建/data/elasticsearch 目录 属于 elasticsearch 用户
+    - name: Create elasticsearch dir
+      file:
+        path: /data/elasticsearch
+        owner: elasticsearch
+        group: elasticsearch
+        state: directory
+        mode: '0755'
+
+    - name: Update hostname
+      hostname:
+        name: "{{item.name}}"
+      when: ansible_default_ipv4.address == item.ip
+      loop:
+        - { name: es-master1, ip: 10.19.10.1 }
+        - { name: es-master2, ip: 10.19.10.2 }
+        - { name: es-master3, ip: 10.19.10.3 }
+        - { name: es-hot1, ip: 10.19.10.4 }
+        - { name: es-hot2, ip: 10.19.10.5 }
+        - { name: es-hot3, ip: 10.19.10.6 }
+        - { name: es-warm1, ip: 10.19.10.7 }
+        - { name: es-warm2, ip: 10.19.10.8 }
+        - { name: es-warm3, ip: 10.19.10.9 }
+        - { name: es-cold1, ip: 10.19.10.10 }
+        - { name: es-cold2, ip: 10.19.10.11 }
+        - { name: es-cold3, ip: 10.19.10.12 }
+
+    - name: Set /etc/security/limits.conf
+      blockinfile:
+        marker: "# {mark} elasticsearch user limit"
+        path: /etc/security/limits.conf
+        block: |
+          elasticsearch soft memlock unlimited
+          elasticsearch hard memlock unlimited
+
+    - name: Set /usr/lib/systemd/system/elasticsearch.service
+      blockinfile:
+        marker: "# {mark} Service startup LimitMEMLOCK "
+        path: /usr/lib/systemd/system/elasticsearch.service
+        insertafter: '^SuccessExitStatus'
+        block: |
+          LimitMEMLOCK=infinity
+
+    # 删除elasticsearch.yml文件
+    - name: Remove elasticsearch.yml
+      file:
+        path: /etc/elasticsearch/elasticsearch.yml
+        state: absent
+
+    # 修改 /etc/elasticsearch/elasticsearch.yml 公共部分
+    - name: elasticsearch.yaml Common Part
+      blockinfile:
+        create: yes
+        marker: "# {mark} Common Node Config"
+        path: /etc/elasticsearch/elasticsearch.yml
+        block: |
+          node.ingest: false
+          node.name: {{ansible_hostname}}
+          network.host: {{ansible_hostname}}
+          cluster.name: es-paas-test
+          path.data: /data/elasticsearch
+          path.logs: /var/log/elasticsearch
+          bootstrap.memory_lock: true
+          discovery.zen.ping.unicast.hosts: ["es-master1", "es-master2", "es-master3"]
+          discovery.zen.minimum_master_nodes: 2
+          indices.memory.index_buffer_size: 20%
+          indices.memory.min_index_buffer_size: 96mb
+          indices.fielddata.cache.size: 15%
+          discovery.zen.fd.ping_timeout: 120s
+          discovery.zen.fd.ping_retries: 6
+          discovery.zen.fd.ping_interval: 30s
+          xpack.security.enabled: false
+          xpack.security.http.ssl.enabled: false
+
+
+
+- hosts: es-master
+  remote_user: root
+  tasks:
+    - name: Set master node config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Master Node Config"
+        block: |
+          node.master: true
+          node.data: false
+
+- hosts: es-hot,es-warm,es-cold
+  remote_user: root
+  tasks:
+    - name: Set data node config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Data Node Config"
+        block: |
+          node.master: false
+          node.data: true
+
+- hosts: es-hot
+  remote_user: root
+  tasks:
+    - name: Set hot data node config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Hot Data Node Config"
+        block: |
+          node.attr.box_type: hot
+
+- hosts: es-warm
+  remote_user: root
+  tasks:
+    - name: Set warm data node config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Warm Data Node Config"
+        block: |
+          node.attr.box_type: warm
+
+- hosts: es-cold
+  remote_user: root
+  tasks:
+    - name: Set cold data node config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Cold Data Node Config"
+        block: |
+          node.attr.box_type: cold
+
+
+

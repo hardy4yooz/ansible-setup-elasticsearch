@@ -1,0 +1,51 @@
+- hosts: all
+  remote_user: root
+  tasks:
+    - name: Create elasticsearch certs dir
+      file:
+        path: /etc/elasticsearch/config/certs/
+        owner: elasticsearch
+        group: elasticsearch
+        state: directory
+        mode: '0755'
+    - name: Copy elastic-certificates.p12
+      copy:
+        src: /usr/share/elasticsearch/elastic-certificates.p12
+        dest: /etc/elasticsearch/config/certs/
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0644'
+
+    - name: Copy elastic-stack-ca.p12
+      copy:
+        src: /usr/share/elasticsearch/elastic-stack-ca.p12
+        dest: /etc/elasticsearch/config/certs/
+        owner: elasticsearch
+        group: elasticsearch
+        mode: '0644'
+
+    - name: Update xpack.security.enabled=true
+      lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: '^xpack.security.enabled'
+        line: 'xpack.security.enabled: true'
+
+    - name: Update xpack.security.transport.ssl.enabled=true
+      lineinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        regexp: '^xpack.security.transport.ssl.enabled'
+        line: 'xpack.security.transport.ssl.enabled: true'
+
+    - name: Set xpack config
+      blockinfile:
+        path: /etc/elasticsearch/elasticsearch.yml
+        marker: "# {mark} Set xpack common config"
+        block: |
+          xpack.monitoring.exporters.my_local:
+            type: local
+            use_ingest: false
+          xpack.monitoring.collection.enabled: true
+          xpack.ssl.verification_mode: none
+          xpack.security.transport.ssl.verification_mode: certificate
+          xpack.security.transport.ssl.keystore.path: config/certs/elastic-certificates.p12
+          xpack.security.transport.ssl.truststore.path: config/certs/elastic-certificates.p12
