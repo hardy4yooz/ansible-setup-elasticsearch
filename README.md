@@ -72,6 +72,11 @@ elasticsearch安装时候的服务器配置、依赖安装、elasticsearch-6.7.0
 
 ## 其他操作
 
+执行playbook脚本
+```shell
+ansible-playbook all 1py-install.yaml
+```
+
 启动elasticsearch
 
 ```shell
