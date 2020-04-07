@@ -1,5 +1,5 @@
 ---
-  - hosts: es-test
+  - hosts: es-master,es-hot,es-warm,es-cold
     # 互信用户
     user: root
     tasks:

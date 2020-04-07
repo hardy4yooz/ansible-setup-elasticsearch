@@ -9,9 +9,23 @@
 ## 准备
 
 - 阿里云国内镜像配置：/etc/apt/sources.list 
+
 - 提前下载：elasticsearch-6.7.0.deb
+
 - 提前安装：ansible 2.9
+
+  ```shell
+  apt install python-pip
+  pip install ansible==2.9 -i https://pypi.tuna.tsinghua.edu.cn/simple
+  # 手动创建配置目录
+  mkdir -p /etc/ansible
+  ```
+
 - 提前生成ansible节点的公钥
+
+  ```shell
+  ssh-keygen
+  ```
 
 ## 文件说明
 
@@ -74,7 +88,7 @@ elasticsearch安装时候的服务器配置、依赖安装、elasticsearch-6.7.0
 
 执行playbook脚本
 ```shell
-ansible-playbook all 1py-install.yaml
+ansible-playbook 1py-install.yaml
 ```
 
 启动elasticsearch
@@ -82,4 +96,29 @@ ansible-playbook all 1py-install.yaml
 ```shell
 ansible all -m systemd -a "state=restarted name=elasticsearch"
 ```
+
+
+
+#  可能出现问题
+
+问题1:
+
+```
+fatal: [10.19.10.179]: FAILED! => {"msg": "to use the 'ssh' connection type with passwords, you must install the sshpass program"}
+
+```
+
+没有使用密码，或者配置公钥访问，执行脚本 `2ssh-push.yaml`
+
+问题2:
+
+```
+Using a SSH password instead of a key is not possible because Host Key checking is enabled and sshpass does not support this.  Please add this host's fingerprint to your known_hosts file to manage this host
+```
+
+ssh第一次连接的时候一般会提示输入yes 进行确认为将key字符串加入到 ~/.ssh/known_hosts 文件中。
+
+解决办法：
+
+在/etc/ansible/ansible.cfg配置:`host_key_checking = False`
 

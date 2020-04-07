@@ -1,4 +1,4 @@
-- hosts: all
+- hosts: es-master,es-hot,es-warm,es-cold
   remote_user: root
   tasks:
     - name: Turn swap off
@@ -87,7 +87,7 @@
     - name: Install elasticsearch-6.7.0.deb
       apt:
         deb: /root/elasticsearch-6.7.0.deb
-      when: es_installed.stat.exists == True
+      when: es_installed.stat.exists == False
     - name: Set JVM -Xms
       lineinfile:
         dest: /etc/elasticsearch/jvm.options

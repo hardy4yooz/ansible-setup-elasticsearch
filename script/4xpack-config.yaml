@@ -1,4 +1,4 @@
-- hosts: all
+- hosts: es-master,es-hot,es-warm,es-cold
   remote_user: root
   tasks:
     - name: Create elasticsearch certs dir

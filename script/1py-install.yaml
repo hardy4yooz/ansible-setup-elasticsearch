@@ -1,4 +1,4 @@
-- hosts: es-test
+- hosts: es-master,es-hot,es-warm,es-cold
   remote_user: root
   gather_facts: false
   tasks:
